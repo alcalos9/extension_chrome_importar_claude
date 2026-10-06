@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Importar Chats a Claude</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header>
+    <h1>Importar Chats a Claude</h1>
+    <p class="sutil">Carga los ZIP generados por «Exportar Chats Claude» o «Exportar Chats ChatGPT».</p>
+  </header>
+
+  <section class="acciones">
+    <label class="btn primario" for="zips">Elegir ZIP exportados…</label>
+    <input type="file" id="zips" accept=".zip,application/zip" multiple hidden>
+  </section>
+
+  <details class="plantilla">
+    <summary>Mensaje inicial (editable)</summary>
+    <textarea id="plantilla" rows="9" spellcheck="false"></textarea>
+    <p class="sutil">Variables: <code>{origen}</code> <code>{titulo}</code> <code>{mensajes}</code> <code>{fecha}</code></p>
+    <button id="btn-restaurar" class="btn secundario peq" type="button">Restaurar mensaje por defecto</button>
+  </details>
+
+  <p id="estado" class="estado" role="status"></p>
+  <progress id="progreso" hidden></progress>
+
+  <div id="lista"></div>
+
+  <p class="sutil nota">
+    La extensión crea un chat nuevo, adjunta los archivos y escribe el mensaje, pero <strong>no lo envía</strong>:
+    revisa la pestaña de Claude y pulsa Enviar tú. No cambies de pestaña mientras se prepara.
+  </p>
+
+  <details>
+    <summary>Registro</summary>
+    <pre id="log"></pre>
+  </details>
+
+  <script src="vendor/jszip.min.js"></script>
+  <script src="core.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

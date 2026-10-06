@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Importar Chats a Claude",
+  "version": "1.0.0",
+  "description": "Carga en tu cuenta de Claude las conversaciones exportadas con «Exportar Chats Claude» o «Exportar Chats ChatGPT»: chat nuevo con la transcripción y los archivos adjuntos.",
+  "minimum_chrome_version": "116",
+  "permissions": ["scripting", "sidePanel"],
+  "host_permissions": ["https://claude.ai/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Importar Chats a Claude",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}
