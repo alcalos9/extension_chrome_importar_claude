@@ -2,9 +2,9 @@
 
 const $ = (id) => document.getElementById(id);
 const TROZO_BYTES = 2250000; // múltiplo de 3: cada trozo se codifica en base64 sin relleno
-const CLAVE_PLANTILLA = 'plantilla_inicial';
+const CLAVE_PLANTILLA = 'plantilla_inicial_v2';
 
-const convs = []; // { zip, base, conv, plan, tarjeta, boton, resultado }
+const convs = []; // { zip, base, conv, plan, estado, lugar, notas + elementos de la fila }
 
 // ---------- UI ----------
 
@@ -66,40 +66,60 @@ async function leerZip(file) {
   return bases.length;
 }
 
+const ESTADOS = {
+  pendiente: 'Sin preparar',
+  trabajando: 'Preparando…',
+  listo: '✓ Preparada',
+  error: '✗ Con error',
+};
+
+// Cada conversación es una fila: título, estado, lugar donde quedó y, solo si hace falta, avisos.
+function pintarFila(c) {
+  c.badge.textContent = ESTADOS[c.estado];
+  c.badge.className = `badge ${c.estado}`;
+  c.lugarEl.textContent = c.lugar ? `Lugar: ${c.lugar}` : '';
+  c.lugarEl.hidden = !c.lugar;
+  c.avisos.textContent = c.notas.join('\n');
+  c.avisos.hidden = !c.notas.length;
+  c.fila.dataset.estado = c.estado;
+  c.boton.textContent = c.estado === 'pendiente' ? 'Preparar' : 'Preparar de nuevo';
+}
+
 function renderLista() {
   const cont = $('lista');
   cont.textContent = '';
   convs.forEach((c, i) => {
     const r = Core.resumenConversacion(c.conv);
-    const div = document.createElement('div');
-    div.className = 'conv';
+    const fila = document.createElement('div');
+    fila.className = 'conv';
 
+    const cab = document.createElement('div');
+    cab.className = 'cab';
     const h = document.createElement('h2');
     h.textContent = r.titulo;
+    const badge = document.createElement('span');
+    cab.append(h, badge);
+
     const meta = document.createElement('div');
     meta.className = 'meta';
-    meta.textContent = `${r.origen} · ${r.mensajes} mensajes · ${c.plan.adjuntos.length} archivos a adjuntar · ${c.zipNombre}`;
-    div.append(h, meta);
-
-    if (c.plan.omitidos.length) {
-      const om = document.createElement('div');
-      om.className = 'omitidos';
-      om.textContent = `No se adjuntarán (${c.plan.omitidos.length}):\n` + c.plan.omitidos.map((o) => `• ${o.ruta} — ${o.motivo}`).join('\n');
-      div.append(om);
-    }
+    meta.textContent = `${r.origen} · ${r.mensajes} mensajes · ${c.plan.adjuntos.length} archivos`;
+    const lugarEl = document.createElement('div');
+    lugarEl.className = 'lugar';
+    const avisos = document.createElement('div');
+    avisos.className = 'avisos';
 
     const btn = document.createElement('button');
-    btn.className = 'btn primario';
-    btn.textContent = 'Preparar en Claude';
+    btn.className = 'btn secundario peq';
     btn.addEventListener('click', () => preparar(i));
-    const res = document.createElement('div');
-    res.className = 'resultado';
-    div.append(btn, res);
+    const pie = document.createElement('div');
+    pie.className = 'pie';
+    pie.append(btn);
 
-    c.tarjeta = div;
-    c.boton = btn;
-    c.resultado = res;
-    cont.append(div);
+    fila.append(cab, meta, lugarEl, avisos, pie);
+    Object.assign(c, { fila, badge, lugarEl, avisos, boton: btn, estado: 'pendiente', lugar: '', notas: [] });
+    if (c.plan.omitidos.length) c.notas.push(`${c.plan.omitidos.length} archivo(s) no se adjuntarán: ${c.plan.omitidos.map((o) => o.motivo).filter((m, k, arr) => arr.indexOf(m) === k).join('; ')}.`);
+    pintarFila(c);
+    cont.append(fila);
   });
 }
 
@@ -174,17 +194,158 @@ async function enviarArchivo(tabId, nombre, blob) {
   }
 }
 
+// ---------- proyectos ----------
+
+// Las consultas de proyectos van por una pestaña de claude.ai (necesitan su sesión).
+async function pestanaClaude() {
+  const inyectar = (id) => chrome.scripting.executeScript({ target: { tabId: id }, files: ['page-lib.js'] });
+  // Se prueban las pestañas de claude.ai ya abiertas (sin esperar a que terminen de cargar: pueden quedar
+  // en «cargando» por conexiones permanentes); las descartadas o no accesibles se saltan.
+  const abiertas = (await chrome.tabs.query({ url: 'https://claude.ai/*' })).filter((t) => !t.discarded);
+  abiertas.sort((a, b) => Number(b.active) - Number(a.active));
+  for (const t of abiertas) {
+    try {
+      await inyectar(t.id);
+      return { id: t.id, creada: false };
+    } catch (e) {
+      log(`Pestaña de claude.ai no utilizable (${e.message}).`);
+    }
+  }
+  const tab = await chrome.tabs.create({ url: 'https://claude.ai/new', active: false });
+  await esperarPestana(tab.id);
+  try {
+    await inyectar(tab.id);
+  } catch (e) {
+    chrome.tabs.remove(tab.id).catch(() => {});
+    throw e;
+  }
+  return { id: tab.id, creada: true };
+}
+
+async function conClaude(fn, ...args) {
+  const t = await pestanaClaude();
+  try {
+    return await enPagina(t.id, fn, ...args);
+  } finally {
+    if (t.creada) chrome.tabs.remove(t.id).catch(() => {});
+  }
+}
+
+let proyectosCargados = false;
+
+const modo = () => document.querySelector('input[name="modo"]:checked').value;
+
+function actualizarDestinoUI() {
+  const m = modo();
+  $('detalle-existente').hidden = m !== 'existente';
+  $('detalle-nuevo').hidden = m !== 'nuevo';
+  $('ayuda-nuevo').hidden = m !== 'nuevo';
+  if (m === 'existente' && !proyectosCargados) cargarProyectos();
+  if (m === 'nuevo') $('nombre-proyecto').focus();
+}
+
+function agregarOpcionProyecto(p) {
+  const o = document.createElement('option');
+  o.value = p.uuid;
+  o.textContent = p.nombre;
+  $('sel-proyecto').append(o);
+  return o;
+}
+
+async function cargarProyectos(dentroDeImportacion = false) {
+  if (!dentroDeImportacion) ocupado(true);
+  $('btn-proyectos').disabled = true;
+  setEstado('Consultando tus proyectos de Claude…');
+  try {
+    const lista = await conClaude('listarProyectos');
+    const sel = $('sel-proyecto');
+    const previo = sel.value;
+    sel.textContent = '';
+    const guia = document.createElement('option');
+    guia.value = '';
+    guia.textContent = lista.length ? 'Elige un proyecto…' : 'No tienes proyectos todavía';
+    sel.append(guia);
+    lista.forEach(agregarOpcionProyecto);
+    if ([...sel.options].some((o) => o.value === previo)) sel.value = previo;
+    proyectosCargados = true;
+    log(`Proyectos: ${lista.length} (${lista.map((p) => p.nombre).join(', ') || 'ninguno'}).`);
+    setEstado(lista.length ? `${lista.length} proyecto(s) disponible(s).` : 'No tienes proyectos: usa «proyecto nuevo» o «chat suelto».');
+  } catch (e) {
+    log(`ERROR cargando proyectos: ${e.message}`);
+    setEstado(`No se pudieron cargar los proyectos: ${e.message}`, true);
+  } finally {
+    if (!dentroDeImportacion) ocupado(false);
+    $('btn-proyectos').disabled = false;
+  }
+}
+
+// Devuelve dónde abrir el chat: chat suelto, proyecto existente o proyecto recién creado.
+async function resolverDestino() {
+  const m = modo();
+  if (m === 'suelto') return { url: 'https://claude.ai/new', lugar: 'chat suelto' };
+
+  if (m === 'existente') {
+    const sel = $('sel-proyecto');
+    if (!sel.value) throw new Error('Elige un proyecto de la lista (o cambia la opción de destino).');
+    return { url: `https://claude.ai/project/${sel.value}`, lugar: `proyecto «${sel.selectedOptions[0].textContent}»` };
+  }
+
+  const p = await crearProyectoNuevo();
+  return { url: `https://claude.ai/project/${p.uuid}`, lugar: `proyecto nuevo «${p.nombre}»` };
+}
+
+// Crea el proyecto con el nombre escrito y deja ese proyecto seleccionado como destino.
+async function crearProyectoNuevo() {
+  const nombre = $('nombre-proyecto').value.trim();
+  if (!nombre) throw new Error('Escribe el nombre del proyecto nuevo.');
+  setEstado(`Creando el proyecto «${nombre}»…`);
+  const p = await conClaude('crearProyecto', nombre);
+  log(`Proyecto creado: ${p.nombre} (${p.uuid}).`);
+  // Las demás conversaciones del lote se agregan a este mismo proyecto, sin crear otro.
+  if (!proyectosCargados) await cargarProyectos(true);
+  else if (![...$('sel-proyecto').options].some((o) => o.value === p.uuid)) agregarOpcionProyecto(p);
+  $('sel-proyecto').value = p.uuid;
+  $('nombre-proyecto').value = '';
+  document.querySelector('input[name="modo"][value="existente"]').checked = true;
+  actualizarDestinoUI();
+  return p;
+}
+
+async function alPulsarCrear() {
+  ocupado(true);
+  $('btn-crear').disabled = true;
+  try {
+    const p = await crearProyectoNuevo();
+    setEstado(`Proyecto «${p.nombre}» creado. Las conversaciones que prepares quedarán dentro.`);
+  } catch (e) {
+    log(`ERROR creando proyecto: ${e.message}`);
+    setEstado(`No se pudo crear el proyecto: ${e.message}`, true);
+  } finally {
+    ocupado(false);
+    $('btn-crear').disabled = false;
+  }
+}
+
 // ---------- preparar un chat ----------
 
 async function preparar(indice) {
   const c = convs[indice];
+  if (c.estado === 'listo' &&
+      !confirm(`«${c.conv.titulo}» ya se preparó en Claude.\n\nSi ya enviaste el mensaje, se creará un chat duplicado. ¿Preparar otro chat?`)) return;
   ocupado(true);
-  c.resultado.textContent = '';
+  const avisosOmitidos = c.notas.filter((n) => /no se adjuntarán/.test(n));
   const lineas = [];
+  c.estado = 'trabajando';
+  c.lugar = '';
+  c.notas = [...avisosOmitidos];
+  pintarFila(c);
   try {
-    setEstado(`Abriendo un chat nuevo para «${c.conv.titulo}»…`);
     setProgreso(0, 0);
-    const tab = await chrome.tabs.create({ url: 'https://claude.ai/new', active: true });
+    const destino = await resolverDestino();
+    c.lugar = destino.lugar;
+    pintarFila(c);
+    setEstado(`Abriendo un chat nuevo para «${c.conv.titulo}»…`);
+    const tab = await chrome.tabs.create({ url: destino.url, active: true });
     await esperarPestana(tab.id);
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['page-lib.js'] });
     await enPagina(tab.id, 'esperarEditor');
@@ -196,7 +357,7 @@ async function preparar(indice) {
       setProgreso(i, total);
       const blob = await c.zip.file(a.ruta).async('blob');
       if (blob.size > Core.LIMITES.maxBytes) {
-        lineas.push(`• ${a.nombre}: supera el límite de tamaño, no se adjuntó.`);
+        lineas.push(`${a.nombre} supera el límite de tamaño y no se adjuntó.`);
         continue;
       }
       await enviarArchivo(tab.id, a.nombre, blob);
@@ -207,35 +368,40 @@ async function preparar(indice) {
     await chrome.tabs.update(tab.id, { active: true });
     const adj = await enPagina(tab.id, 'adjuntarGuardados');
     log(`Adjuntos: método ${adj.metodo}, ${adj.cantidad} archivos, verificado=${adj.verificado}.`);
-    if (adj.metodo === 'ninguno') lineas.push('⚠️ No se pudieron adjuntar los archivos automáticamente: arrástralos tú desde el ZIP.');
-    else if (!adj.verificado) lineas.push('⚠️ No pude confirmar que todos los archivos se adjuntaron: revisa la pestaña de Claude.');
+    if (adj.metodo === 'ninguno') lineas.push('No se pudieron adjuntar los archivos: arrástralos tú desde el ZIP.');
+    else if (!adj.verificado) lineas.push('No pude confirmar todos los adjuntos: revisa la pestaña de Claude.');
 
     setEstado('Escribiendo el mensaje inicial…');
     const prompt = Core.construirPrompt($('plantilla').value, c.conv);
     const w = await enPagina(tab.id, 'escribirPrompt', prompt);
     log(`Mensaje: método ${w.metodo}.`);
+    await enPagina(tab.id, 'vigilarRenombre', c.conv.titulo);
     await enPagina(tab.id, 'limpiar');
 
-    if (c.plan.omitidos.length) lineas.push(`${c.plan.omitidos.length} archivo(s) quedaron fuera (ver arriba).`);
-    lineas.unshift(`✓ Preparado (${adj.cantidad} adjuntos). Revisa la pestaña de Claude y pulsa Enviar.`);
-    c.tarjeta.classList.add('lista');
-    c.boton.textContent = 'Preparar de nuevo';
-    setEstado(`«${c.conv.titulo}» preparada en Claude. No se ha enviado nada.`);
+    c.estado = 'listo';
+    c.notas = [...avisosOmitidos, ...lineas];
+    setEstado('');
   } catch (e) {
     log(`ERROR preparando «${c.conv.titulo}»: ${e.message}`);
-    lineas.unshift(`✗ ${e.message}`);
-    setEstado(e.message, true);
+    c.estado = 'error';
+    c.notas = [e.message, ...lineas];
+    setEstado('');
   } finally {
-    c.resultado.textContent = lineas.join('\n');
+    pintarFila(c);
     setProgreso(0, null);
     ocupado(false);
   }
 }
 
 $('zips').addEventListener('change', alElegirZips);
+$('btn-proyectos').addEventListener('click', () => cargarProyectos());
+$('btn-crear').addEventListener('click', alPulsarCrear);
+$('nombre-proyecto').addEventListener('keydown', (e) => { if (e.key === 'Enter') alPulsarCrear(); });
+document.querySelectorAll('input[name="modo"]').forEach((r) => r.addEventListener('change', actualizarDestinoUI));
 $('plantilla').addEventListener('input', guardarPlantilla);
 $('btn-restaurar').addEventListener('click', () => {
   $('plantilla').value = Core.PLANTILLA_POR_DEFECTO;
   guardarPlantilla();
 });
 cargarPlantilla();
+setEstado('Elige uno o más ZIP para empezar.');

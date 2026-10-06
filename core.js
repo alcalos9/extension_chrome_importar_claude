@@ -7,12 +7,12 @@
   const LIMITES = { maxArchivos: 20, maxBytes: 30 * 1024 * 1024 };
 
   const PLANTILLA_POR_DEFECTO = [
-    'Te adjunto una conversación anterior que mantuve con {origen}, titulada «{titulo}» ({mensajes} mensajes{fecha}).',
+    'Esta es la conversación que tuve con {origen}, titulada «{titulo}» ({mensajes} mensajes{fecha}). Quiero retomarla aquí como si hubiera ocurrido en este chat.',
     '',
     '- conversacion.md es la transcripción completa e indica quién escribe cada mensaje.',
     '- Los demás adjuntos son los archivos e imágenes que aparecen en ella; sus nombres coinciden con las rutas citadas en la transcripción.',
     '',
-    'Léela completa y respóndeme solo con un resumen breve de qué trata y en qué punto quedó. Después continuaremos desde ahí.',
+    'Léela completa y tómala como el historial real de este chat: lo dicho, las decisiones y el código ya son contexto compartido. No la resumas ni la repitas; responde solo «Listo, retomamos desde ahí» y espera mi siguiente mensaje.',
   ].join('\n');
 
   function basename(ruta) {

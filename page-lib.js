@@ -67,6 +67,16 @@
     return document.querySelectorAll(CFG.sel.miniaturas).length;
   }
 
+  // El input de archivos DEBE ser el del cuadro de mensaje. En la página de un proyecto existe otro input
+  // (los archivos del proyecto) y usarlo subiría los adjuntos al conocimiento del proyecto.
+  function inputDelComposer() {
+    const ed = editor();
+    const caja = ed && (ed.closest('fieldset') || ed.closest('form'));
+    const dentro = caja && caja.querySelector(CFG.sel.inputArchivo);
+    if (dentro) return dentro;
+    return /^\/project\//.test(location.pathname) ? null : document.querySelector(CFG.sel.inputArchivo);
+  }
+
   async function adjuntarGuardados() {
     const files = archivosGuardados();
     if (!files.length) return { metodo: 'ninguno', cantidad: 0, verificado: true };
@@ -76,7 +86,7 @@
 
     const metodos = [
       ['input', () => {
-        const input = document.querySelector(CFG.sel.inputArchivo);
+        const input = inputDelComposer();
         if (!input) return false;
         input.files = dt.files;
         input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -146,10 +156,80 @@
     return { metodo: 'dom' };
   }
 
+  // ---------- proyectos (API interna de claude.ai, sin documentar: puede cambiar) ----------
+
+  async function api(ruta, opciones) {
+    const r = await fetch(ruta, { credentials: 'include', headers: { 'content-type': 'application/json' }, ...opciones });
+    if (!r.ok) throw new Error(`claude.ai respondió ${r.status} en ${ruta.split('?')[0].replace(/[0-9a-f-]{36}/g, '…')}`);
+    return r.json();
+  }
+
+  async function organizacion() {
+    const orgs = await api('/api/organizations');
+    const lista = Array.isArray(orgs) ? orgs : [];
+    // Se prefiere la organización con capacidad de chat; si no, la primera.
+    const o = lista.find((x) => (x.capabilities || []).includes('chat')) || lista[0];
+    if (!o || !o.uuid) throw new Error('No se pudo identificar tu cuenta de Claude (¿sesión cerrada?).');
+    return o.uuid;
+  }
+
+  async function listarProyectos() {
+    const org = await organizacion();
+    const datos = await api(`/api/organizations/${org}/projects?limit=200`);
+    const lista = Array.isArray(datos) ? datos : (datos.projects || datos.data || []);
+    return lista
+      .filter((p) => p && p.uuid && !p.archived_at)
+      .map((p) => ({ uuid: p.uuid, nombre: p.name || 'Sin nombre' }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }
+
+  async function crearProyecto(nombre) {
+    const org = await organizacion();
+    const p = await api(`/api/organizations/${org}/projects`, {
+      method: 'POST',
+      body: JSON.stringify({ name: nombre, description: '', is_private: true }),
+    });
+    if (!p || !p.uuid) throw new Error('claude.ai no devolvió el proyecto creado.');
+    return { uuid: p.uuid, nombre: p.name || nombre };
+  }
+
+  // El chat no existe hasta que el usuario pulsa Enviar. Esta vigilancia (vive mientras la pestaña no se
+  // recargue) detecta el chat nuevo en la URL y le pone el título original; Claude genera uno automático
+  // tras la primera respuesta, así que se reaplica durante un rato.
+  function vigilarRenombre(titulo) {
+    const nombre = String(titulo || '').slice(0, 200);
+    if (!nombre) return false;
+    if (globalThis.__IMPORTAR_VIGILANDO__) clearInterval(globalThis.__IMPORTAR_VIGILANDO__);
+    const t0 = Date.now();
+    let inicio = null;
+    let ocupado = false;
+    const id = setInterval(async () => {
+      if (ocupado) return;
+      const ahora = Date.now();
+      if (ahora - t0 > 30 * 60 * 1000) { clearInterval(id); return; }
+      const m = location.pathname.match(/\/chat\/([0-9a-f-]{36})/);
+      if (!m) return;
+      if (inicio === null) inicio = ahora;
+      if (ahora - inicio > 90 * 1000) { clearInterval(id); return; }
+      ocupado = true;
+      try {
+        const org = await organizacion();
+        const ruta = `/api/organizations/${org}/chat_conversations/${m[1]}`;
+        const actual = await api(ruta);
+        if (actual && actual.name !== nombre) {
+          await api(ruta, { method: 'PUT', body: JSON.stringify({ name: nombre }) });
+        }
+      } catch (e) { /* se reintenta en el siguiente ciclo */ }
+      ocupado = false;
+    }, 3000);
+    globalThis.__IMPORTAR_VIGILANDO__ = id;
+    return true;
+  }
+
   function limpiar() {
     buffer.archivos.clear();
     return true;
   }
 
-  globalThis.__IMPORTAR_CLAUDE__ = { esperarEditor, guardarTrozo, adjuntarGuardados, escribirPrompt, limpiar };
+  globalThis.__IMPORTAR_CLAUDE__ = { vigilarRenombre, listarProyectos, crearProyecto, esperarEditor, guardarTrozo, adjuntarGuardados, escribirPrompt, limpiar };
 })();

@@ -71,18 +71,30 @@ progress { width: 100%; margin-top: 8px; }
 .estado { margin: 12px 0 0; font-weight: 600; }
 .estado.error { color: #c0392b; }
 
-#lista { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
-.conv {
-  padding: 12px;
-  border: 1px solid var(--borde);
-  border-radius: 10px;
-  background: var(--tarjeta);
-}
-.conv h2 { font-size: 14px; margin: 0 0 4px; word-break: break-word; }
-.conv .meta { font-size: 12px; color: var(--sutil); margin-bottom: 8px; }
-.conv .omitidos { font-size: 12px; color: #b9770e; margin: 6px 0 8px; white-space: pre-wrap; }
-.conv.lista { border-color: var(--exito); }
-.conv .resultado { font-size: 12px; margin-top: 8px; white-space: pre-wrap; }
+#lista { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.conv { border: 1px solid var(--borde); border-radius: 8px; background: var(--tarjeta); padding: 10px 12px; }
+.conv .cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.conv h2 { font-size: 14px; margin: 0; word-break: break-word; }
+.conv .meta { font-size: 12px; color: var(--sutil); margin-top: 2px; }
+.conv .lugar { font-size: 12px; margin-top: 4px; }
+.conv .avisos { font-size: 12px; color: #b9770e; margin-top: 4px; white-space: pre-wrap; }
+.conv[data-estado="error"] .avisos { color: #c0392b; }
+.conv .pie { margin-top: 8px; }
+.badge { font-size: 11px; white-space: nowrap; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--borde); color: var(--sutil); }
+.badge.trabajando { color: #2563eb; border-color: #2563eb; }
+.badge.listo { color: var(--exito); border-color: var(--exito); }
+.badge.error { color: #c0392b; border-color: #c0392b; }
 
 pre { white-space: pre-wrap; font-size: 11px; max-height: 240px; overflow: auto; }
 [hidden] { display: none !important; }
+
+
+.destino { margin: 14px 0; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
+.destino legend { font-weight: 600; font-size: 13px; padding: 0 4px; }
+.opcion { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; padding: 4px 0; }
+.opcion input { margin-top: 3px; }
+.opcion span { display: flex; flex-direction: column; }
+.opcion small { opacity: .7; font-size: 12px; }
+.detalle { display: flex; gap: 6px; margin: 0 0 4px 24px; }
+.detalle[hidden] { display: none; }
+.detalle select, .detalle input[type="text"] { flex: 1; min-width: 0; padding: 6px 8px; font: inherit; box-sizing: border-box; }

@@ -17,6 +17,34 @@
     <input type="file" id="zips" accept=".zip,application/zip" multiple hidden>
   </section>
 
+  <fieldset class="destino">
+    <legend>¿Dónde quieres dejar la conversación?</legend>
+
+    <label class="opcion">
+      <input type="radio" name="modo" value="suelto" checked>
+      <span><strong>Chat suelto</strong><small>Un chat nuevo, fuera de cualquier proyecto.</small></span>
+    </label>
+
+    <label class="opcion">
+      <input type="radio" name="modo" value="existente">
+      <span><strong>En un proyecto existente</strong><small>Se agrega como chat dentro de uno de tus proyectos.</small></span>
+    </label>
+    <div class="detalle" id="detalle-existente" hidden>
+      <select id="sel-proyecto" aria-label="Proyecto existente"></select>
+      <button id="btn-proyectos" class="btn secundario peq" type="button">Actualizar lista</button>
+    </div>
+
+    <label class="opcion">
+      <input type="radio" name="modo" value="nuevo">
+      <span><strong>En un proyecto nuevo</strong><small>Crea un proyecto con el nombre que indiques y deja el chat dentro.</small></span>
+    </label>
+    <div class="detalle" id="detalle-nuevo" hidden>
+      <input type="text" id="nombre-proyecto" placeholder="Nombre del nuevo proyecto" maxlength="100">
+      <button id="btn-crear" class="btn secundario peq" type="button">Crear proyecto</button>
+    </div>
+    <p class="sutil ayuda" id="ayuda-nuevo" hidden>Se crea al pulsar «Crear proyecto», o automáticamente al preparar la primera conversación.</p>
+  </fieldset>
+
   <details class="plantilla">
     <summary>Mensaje inicial (editable)</summary>
     <textarea id="plantilla" rows="9" spellcheck="false"></textarea>
