@@ -108,7 +108,55 @@
     return { titulo: conv.titulo || 'Sin título', origen: origenDe(conv), mensajes: msgs.length, adjuntosCitados: nAdj };
   }
 
-  const api = { LIMITES, PLANTILLA_POR_DEFECTO, localizarConversaciones, planificarAdjuntos, construirPrompt, resumenConversacion, origenDe, basename, mimeDe };
+  // ---------- proyectos y skills exportados ----------
+
+  const EXT_TEXTO = /\.(md|markdown|txt|csv|tsv|json|jsonl|xml|html?|css|js|mjs|ts|tsx|jsx|py|java|kt|c|h|cpp|cs|go|rs|rb|php|sh|sql|ya?ml|toml|ini|log|rtf|tex)$/i;
+
+  // Los documentos de texto se agregan al proyecto como texto; el resto (PDF, imágenes, Office…) como archivo.
+  function esTextoPlano(nombre) {
+    return EXT_TEXTO.test(String(nombre));
+  }
+
+  // Qué contiene un ZIP exportado: conversaciones, proyectos (proyecto.json), skills (skill.json) o un skill suelto (SKILL.md).
+  function clasificarZip(rutas) {
+    const bases = (nombre) => rutas.filter((r) => r === nombre || r.endsWith('/' + nombre)).map((r) => r.slice(0, r.length - nombre.length));
+    const convBases = localizarConversaciones(rutas);
+    const proyBases = bases('proyecto.json');
+    const skillBases = bases('skill.json');
+    let skillSuelto = null;
+    if (!convBases.length && !proyBases.length && !skillBases.length) {
+      const md = rutas.find((r) => /^([^/]+\/)?SKILL\.md$/i.test(r));
+      if (md) skillSuelto = md.slice(0, md.length - 'SKILL.md'.length);
+    }
+    return { convBases, proyBases, skillBases, skillSuelto };
+  }
+
+  // A qué proyecto pertenece una conversación exportada dentro de un ZIP de proyectos (la base más larga que la contiene).
+  function proyectoDe(baseConv, proyBases) {
+    return proyBases.filter((p) => baseConv.startsWith(p)).sort((a, b) => b.length - a.length)[0] || null;
+  }
+
+  // Conocimiento de un proyecto exportado: textos en conocimiento/ y archivos en conocimiento/archivos/.
+  function planificarProyecto(base, rutas) {
+    const pref = base + 'conocimiento/';
+    const rel = rutas.filter((r) => r.startsWith(pref)).map((r) => ({ ruta: r, relativa: r.slice(pref.length), nombre: basename(r) }));
+    return {
+      docs: rel.filter((a) => !a.relativa.includes('/')),
+      archivos: rel.filter((a) => a.relativa.startsWith('archivos/')),
+    };
+  }
+
+  // Skill exportado: el ZIP original (<carpeta>/<nombre>.zip) o, si no está, los archivos sueltos para reconstruirlo.
+  function planificarSkill(base, rutas) {
+    const dentro = rutas
+      .filter((r) => r.startsWith(base))
+      .map((r) => ({ ruta: r, relativa: r.slice(base.length) }))
+      .filter((a) => a.relativa !== 'skill.json' && !a.relativa.startsWith('debug/'));
+    const zip = dentro.find((a) => /^[^/]+\.zip$/i.test(a.relativa));
+    return { zipRuta: zip ? zip.ruta : null, archivos: dentro.filter((a) => a !== zip) };
+  }
+
+  const api = { esTextoPlano, clasificarZip, proyectoDe, planificarProyecto, planificarSkill, LIMITES, PLANTILLA_POR_DEFECTO, localizarConversaciones, planificarAdjuntos, construirPrompt, resumenConversacion, origenDe, basename, mimeDe };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Core = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

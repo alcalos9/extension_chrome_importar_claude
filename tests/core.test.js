@@ -55,5 +55,33 @@ const Core = require('../core.js');
   assert.strictEqual(Core.mimeDe('a.PDF'), 'application/pdf');
   assert.strictEqual(Core.mimeDe('sin_ext'), 'application/octet-stream');
 
+  // Proyectos y skills exportados
+  const rp = [
+    'proyectos_claude_2026/Mi proyecto/proyecto.json', 'proyectos_claude_2026/Mi proyecto/instrucciones.md',
+    'proyectos_claude_2026/Mi proyecto/conocimiento/notas.md', 'proyectos_claude_2026/Mi proyecto/conocimiento/archivos/manual.pdf',
+    'proyectos_claude_2026/Mi proyecto/debug/crudo.json',
+    'proyectos_claude_2026/Mi proyecto/conversaciones/01_chat/conversacion.json', 'proyectos_claude_2026/Mi proyecto/conversaciones/01_chat/conversacion.md',
+  ];
+  const cl = Core.clasificarZip(rp);
+  assert.deepStrictEqual(cl.proyBases, ['proyectos_claude_2026/Mi proyecto/']);
+  assert.strictEqual(cl.convBases.length, 1);
+  assert.strictEqual(Core.proyectoDe(cl.convBases[0], cl.proyBases), 'proyectos_claude_2026/Mi proyecto/');
+  assert.strictEqual(Core.proyectoDe('otra/', cl.proyBases), null);
+  const pp = Core.planificarProyecto(cl.proyBases[0], rp);
+  assert.deepStrictEqual(pp.docs.map((d) => d.nombre), ['notas.md']);
+  assert.deepStrictEqual(pp.archivos.map((d) => d.nombre), ['manual.pdf']);
+  assert.ok(Core.esTextoPlano('a.md') && Core.esTextoPlano('x.CSV') && !Core.esTextoPlano('a.pdf') && !Core.esTextoPlano('a.png'));
+
+  const rs = ['skills_claude_2026/Redactor/skill.json', 'skills_claude_2026/Redactor/Redactor.zip', 'skills_claude_2026/Redactor/SKILL.md', 'skills_claude_2026/Redactor/debug/crudo.json', 'skills_claude_2026/INDICE.md'];
+  const cs = Core.clasificarZip(rs);
+  assert.deepStrictEqual(cs.skillBases, ['skills_claude_2026/Redactor/']);
+  const ps = Core.planificarSkill(cs.skillBases[0], rs);
+  assert.strictEqual(ps.zipRuta, 'skills_claude_2026/Redactor/Redactor.zip');
+  assert.deepStrictEqual(ps.archivos.map((a) => a.relativa), ['SKILL.md']);
+  assert.strictEqual(Core.planificarSkill('s/', ['s/skill.json', 's/SKILL.md']).zipRuta, null);
+  assert.strictEqual(Core.clasificarZip(['mi-skill/SKILL.md', 'mi-skill/ref.txt']).skillSuelto, 'mi-skill/');
+  assert.strictEqual(Core.clasificarZip(['SKILL.md']).skillSuelto, '');
+  assert.strictEqual(Core.clasificarZip(['a.txt']).skillSuelto, null);
+
   console.log('core.test.js: OK');
 })().catch((e) => { console.error(e); process.exit(1); });

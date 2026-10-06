@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Importar Chats a Claude",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Carga en tu cuenta de Claude las conversaciones exportadas con «Exportar Chats Claude» o «Exportar Chats ChatGPT»: chat nuevo con la transcripción y los archivos adjuntos.",
   "minimum_chrome_version": "116",
   "permissions": [

@@ -9,7 +9,7 @@
 <body>
   <header>
     <h1>Importar Chats a Claude</h1>
-    <p class="sutil">Carga los ZIP generados por «Exportar Chats Claude» o «Exportar Chats ChatGPT».</p>
+    <p class="sutil">Importa a Claude lo que exportaste con «Exportar Chats Claude» o «Exportar Chats ChatGPT»: conversaciones, proyectos y skills.</p>
   </header>
 
   <section class="acciones">
@@ -18,7 +18,7 @@
   </section>
 
   <fieldset class="destino">
-    <legend>¿Dónde quieres dejar la conversación?</legend>
+    <legend>¿Dónde quieres dejar las conversaciones?</legend>
 
     <label class="opcion">
       <input type="radio" name="modo" value="suelto" checked>
@@ -43,6 +43,7 @@
       <button id="btn-crear" class="btn secundario peq" type="button">Crear proyecto</button>
     </div>
     <p class="sutil ayuda" id="ayuda-nuevo" hidden>Se crea al pulsar «Crear proyecto», o automáticamente al preparar la primera conversación.</p>
+    <p class="sutil ayuda">Las conversaciones que vienen dentro de un proyecto exportado se agregan a ese proyecto, elijas lo que elijas aquí.</p>
   </fieldset>
 
   <details class="plantilla">

@@ -183,14 +183,73 @@
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
   }
 
-  async function crearProyecto(nombre) {
+  async function crearProyecto(nombre, descripcion = '') {
     const org = await organizacion();
     const p = await api(`/api/organizations/${org}/projects`, {
       method: 'POST',
-      body: JSON.stringify({ name: nombre, description: '', is_private: true }),
+      body: JSON.stringify({ name: nombre, description: descripcion, is_private: true }),
     });
     if (!p || !p.uuid) throw new Error('claude.ai no devolvió el proyecto creado.');
     return { uuid: p.uuid, nombre: p.name || nombre };
+  }
+
+  // ---------- importar proyectos y skills (API interna, sin documentar: se prueban varias rutas) ----------
+
+  // Como api(), pero devuelve el estado en vez de lanzar, para poder probar la siguiente ruta.
+  async function llamar(metodo, ruta, cuerpo) {
+    try {
+      const r = await fetch(ruta, {
+        method: metodo, credentials: 'include',
+        ...(cuerpo instanceof FormData ? { body: cuerpo } : cuerpo !== undefined ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(cuerpo) } : {}),
+      });
+      const texto = await r.text();
+      let data = null;
+      try { data = JSON.parse(texto); } catch (e) { data = null; }
+      return { ok: r.ok, status: r.status, data, detalle: r.ok ? '' : texto.slice(0, 160) };
+    } catch (e) {
+      return { ok: false, status: 0, data: null, detalle: String((e && e.message) || e) };
+    }
+  }
+
+  const conOrg = (ruta, org) => ruta.replace('{org}', org);
+
+  // Instrucciones (y descripción) del proyecto: se prueba PUT y luego PATCH.
+  async function configurarProyecto(uuid, nombre, descripcion, instrucciones) {
+    const org = await organizacion();
+    const ruta = `/api/organizations/${org}/projects/${uuid}`;
+    const cuerpo = { name: nombre, description: descripcion || '', prompt_template: instrucciones || '' };
+    const errores = [];
+    for (const metodo of ['PUT', 'PATCH']) {
+      const r = await llamar(metodo, ruta, cuerpo);
+      if (r.ok) return { ok: true, metodo };
+      errores.push(`${metodo} ${r.status}`);
+    }
+    return { ok: false, errores };
+  }
+
+  // Documento de texto en el conocimiento del proyecto.
+  async function subirDocumento(uuid, nombre, contenido) {
+    const org = await organizacion();
+    const r = await llamar('POST', `/api/organizations/${org}/projects/${uuid}/docs`, { file_name: nombre, content: contenido });
+    return { ok: r.ok, status: r.status, detalle: r.detalle };
+  }
+
+  // Sube por multipart un archivo ya recibido por trozos (clave) probando varias rutas; {org} se sustituye aquí.
+  async function subirMultipart(clave, nombreArchivo, rutas, campo = 'file') {
+    const e = buffer.archivos.get(clave);
+    if (!e || e.recibidos !== e.trozos.length) throw new Error(`Archivo incompleto: ${nombreArchivo}`);
+    const org = await organizacion();
+    const intentos = [];
+    for (const ruta of rutas) {
+      const fd = new FormData();
+      fd.append(campo, new File(e.trozos, nombreArchivo, { type: e.tipo || 'application/octet-stream' }), nombreArchivo);
+      const r = await llamar('POST', conOrg(ruta, org), fd);
+      if (r.ok) { buffer.archivos.delete(clave); return { ok: true, ruta: conOrg(ruta, org).replace(/[0-9a-f-]{36}/g, '…'), data: r.data }; }
+      intentos.push(`${conOrg(ruta, org).replace(/[0-9a-f-]{36}/g, '…').replace(org, '…')} → ${r.status}${r.detalle ? ' ' + r.detalle.slice(0, 80) : ''}`);
+      if (r.status === 401 || r.status === 403) break;
+    }
+    buffer.archivos.delete(clave);
+    return { ok: false, intentos };
   }
 
   // El chat no existe hasta que el usuario pulsa Enviar. Esta vigilancia (vive mientras la pestaña no se
@@ -231,5 +290,5 @@
     return true;
   }
 
-  globalThis.__IMPORTAR_CLAUDE__ = { vigilarRenombre, listarProyectos, crearProyecto, esperarEditor, guardarTrozo, adjuntarGuardados, escribirPrompt, limpiar };
+  globalThis.__IMPORTAR_CLAUDE__ = { configurarProyecto, subirDocumento, subirMultipart, vigilarRenombre, listarProyectos, crearProyecto, esperarEditor, guardarTrozo, adjuntarGuardados, escribirPrompt, limpiar };
 })();

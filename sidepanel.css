@@ -98,3 +98,4 @@ pre { white-space: pre-wrap; font-size: 11px; max-height: 240px; overflow: auto;
 .detalle { display: flex; gap: 6px; margin: 0 0 4px 24px; }
 .detalle[hidden] { display: none; }
 .detalle select, .detalle input[type="text"] { flex: 1; min-width: 0; padding: 6px 8px; font: inherit; box-sizing: border-box; }
+.conv.hija { margin-left: 18px; }

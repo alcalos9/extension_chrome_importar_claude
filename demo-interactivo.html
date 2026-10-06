@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demo Interactivo - Importar Chats a Claude</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #121212;
+      --bg-panel: #1e1e1e;
+      --bg-claude: #212121;
+      --text-main: #e0e0e0;
+      --text-muted: #9e9e9e;
+      --accent: #d97757;
+      --accent-hover: #c46344;
+      --border: #333;
+      --tooltip-bg: rgba(255, 255, 255, 0.95);
+      --tooltip-text: #111;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background-color: #000;
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 50%, #2a2a2a 0%, #000 100%);
+    }
+
+    .browser-window {
+      width: 90vw;
+      max-width: 1200px;
+      height: 80vh;
+      background-color: var(--bg-claude);
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .browser-header {
+      height: 48px;
+      background-color: #1a1a1a;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .mac-dots { display: flex; gap: 8px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.red { background-color: #ff5f56; }
+    .dot.yellow { background-color: #ffbd2e; }
+    .dot.green { background-color: #27c93f; }
+
+    .address-bar {
+      flex-grow: 1;
+      margin: 0 24px;
+      background-color: #2a2a2a;
+      border-radius: 6px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      color: var(--text-muted);
+      font-size: 13px;
+      justify-content: center;
+    }
+
+    .extensions-bar { display: flex; gap: 12px; align-items: center; }
+
+    .ext-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      position: relative;
+      transition: background-color 0.2s;
+    }
+    .ext-icon:hover { background-color: rgba(255,255,255,0.1); }
+    .ext-icon svg { width: 18px; height: 18px; fill: #fff; }
+
+    .pulse-target { position: relative; z-index: 100; }
+    .pulse-target::after {
+      content: '';
+      position: absolute;
+      top: -4px; left: -4px; right: -4px; bottom: -4px;
+      border-radius: inherit;
+      border: 2px solid var(--accent);
+      animation: pulse 1.5s infinite;
+      pointer-events: none;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.3); opacity: 0; }
+    }
+
+    .browser-content {
+      display: flex;
+      flex-grow: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* EMPTY CLAUDE UI */
+    .claude-ui {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+    }
+
+    .claude-greeting {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 40px;
+      color: #fff;
+    }
+
+    /* FAKE INPUT BOX */
+    .claude-input-container {
+      width: 100%;
+      max-width: 800px;
+      background-color: #333;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+    }
+
+    .claude-input-text {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+      resize: none;
+      height: 60px;
+      width: 100%;
+    }
+
+    .claude-attachments {
+      display: flex;
+      gap: 8px;
+    }
+
+    .attachment-chip {
+      background-color: #444;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      opacity: 0;
+      transform: scale(0.9);
+      transition: all 0.4s ease;
+    }
+    .attachment-chip.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .claude-send-btn {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      width: 32px;
+      height: 32px;
+      background-color: #555;
+      border-radius: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+    }
+    .claude-send-btn.active {
+      background-color: var(--accent);
+    }
+    .claude-send-btn svg { width: 16px; height: 16px; fill: #fff; }
+
+    /* EXTENSION SIDE PANEL */
+    .side-panel {
+      width: 350px;
+      background-color: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: absolute;
+      top: 0; right: -350px; bottom: 0;
+      transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 50;
+      box-shadow: -5px 0 20px rgba(0,0,0,0.3);
+    }
+
+    .side-panel.open { right: 0; }
+
+    .panel-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-header h2 { font-size: 18px; margin-bottom: 4px; }
+    .panel-header p { font-size: 13px; color: var(--text-muted); }
+
+    .panel-content {
+      padding: 20px;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .btn-primary { background-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background-color: var(--accent-hover); }
+
+    fieldset {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 0;
+    }
+    legend {
+      padding: 0 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+      cursor: pointer;
+    }
+    .radio-option:last-child { margin-bottom: 0; }
+    .radio-option input { margin-top: 4px; }
+    .radio-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+    .radio-text small { font-size: 12px; color: var(--text-muted); }
+
+    .status-msg {
+      font-size: 13px;
+      color: var(--success);
+      padding: 12px;
+      background: rgba(76, 175, 80, 0.1);
+      border: 1px solid var(--success);
+      border-radius: 6px;
+      display: none;
+    }
+    .status-msg.visible { display: block; animation: fadeIn 0.5s ease; }
+
+    .guide-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 200;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: var(--tooltip-bg);
+      color: var(--tooltip-text);
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      max-width: 250px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      pointer-events: auto;
+    }
+    .tooltip.visible { opacity: 1; transform: translateY(0); }
+    .tooltip::before {
+      content: '';
+      position: absolute;
+      width: 12px; height: 12px;
+      background: var(--tooltip-bg);
+      transform: rotate(45deg);
+    }
+
+    #tt-step1 { top: 60px; right: 16px; }
+    #tt-step1::before { top: -6px; right: 20px; }
+
+    #tt-step2 { top: 130px; right: 370px; }
+    #tt-step2::before { top: 20px; right: -6px; }
+
+    #tt-step3 { bottom: 180px; left: 50%; transform: translateX(-50%) translateY(10px); }
+    #tt-step3.visible { transform: translateX(-50%) translateY(0); }
+    #tt-step3::before { bottom: -6px; left: calc(50% - 6px); }
+
+    .success-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+      backdrop-filter: blur(5px);
+    }
+    .success-overlay.visible { opacity: 1; pointer-events: auto; }
+    .success-card {
+      background: var(--bg-panel);
+      padding: 40px;
+      border-radius: 16px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.1);
+      transform: scale(0.9);
+      transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .success-overlay.visible .success-card { transform: scale(1); }
+    .success-icon {
+      width: 64px; height: 64px;
+      background: var(--success);
+      border-radius: 50%;
+      display: flex; justify-content: center; align-items: center;
+      margin: 0 auto 20px auto;
+    }
+    .success-icon svg { width: 32px; height: 32px; fill: #fff; }
+    .success-card h3 { font-size: 24px; margin-bottom: 8px; }
+    .success-card p { color: var(--text-muted); margin-bottom: 24px; }
+    .restart-btn {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-main); padding: 10px 20px;
+      border-radius: 6px; cursor: pointer; font-weight: 500;
+    }
+    .restart-btn:hover { background: rgba(255,255,255,0.05); }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <div class="browser-window">
+    
+    <div class="browser-header">
+      <div class="mac-dots">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+      </div>
+      <div class="address-bar">https://claude.ai/new</div>
+      <div class="extensions-bar">
+        <div class="ext-icon" id="ext-button">
+          <!-- Upload/Import Icon -->
+          <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="browser-content">
+      
+      <div class="claude-ui">
+        <div class="claude-greeting">Good morning, Alejandro</div>
+        
+        <div class="claude-input-container">
+          <textarea class="claude-input-text" id="claude-textarea" placeholder="How can Claude help you today?" readonly></textarea>
+          
+          <div class="claude-attachments" id="attachments-area">
+            <div class="attachment-chip" id="chip1">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#aaa"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+              chat_fibonacci.json
+            </div>
+            <div class="attachment-chip" id="chip2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#aaa"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+              contexto.md
+            </div>
+          </div>
+          
+          <div class="claude-send-btn" id="btn-send-claude">
+            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="side-panel" id="side-panel">
+        <div class="panel-header">
+          <h2>Importar Chats a Claude</h2>
+          <p>Carga los ZIP generados por «Exportar Chats».</p>
+        </div>
+        
+        <div class="panel-content">
+          <div class="btn btn-primary" id="btn-elegir-zip">Elegir ZIP exportados…</div>
+          
+          <fieldset>
+            <legend>¿Dónde quieres dejar la conversación?</legend>
+            <label class="radio-option">
+              <input type="radio" name="modo" checked>
+              <span class="radio-text">
+                <strong>Chat suelto</strong>
+                <small>Un chat nuevo, fuera de cualquier proyecto.</small>
+              </span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="modo">
+              <span class="radio-text">
+                <strong>En un proyecto existente</strong>
+                <small>Se agrega como chat dentro de un proyecto.</small>
+              </span>
+            </label>
+          </fieldset>
+
+          <p class="status-msg" id="status-msg">
+            ✓ Archivos adjuntados. Pulsa "Enviar" en Claude.
+          </p>
+
+          <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+            La extensión crea un chat nuevo, adjunta los archivos y escribe el mensaje, pero <strong>no lo envía</strong>: revisa la pestaña de Claude y pulsa Enviar tú.
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="guide-overlay">
+      <div class="tooltip" id="tt-step1">
+        <strong>Paso 1</strong><br>
+        Haz clic en el icono para abrir la herramienta de importación.
+      </div>
+      <div class="tooltip" id="tt-step2">
+        <strong>Paso 2</strong><br>
+        Haz clic aquí para seleccionar el archivo ZIP que exportaste antes.
+      </div>
+      <div class="tooltip" id="tt-step3">
+        <strong>Paso 3</strong><br>
+        ¡Listo! La extensión adjunta los archivos y escribe el prompt mágico. Haz clic en el botón Enviar de Claude.
+      </div>
+    </div>
+    
+    <div class="success-overlay" id="success-screen">
+      <div class="success-card">
+        <div class="success-icon">
+          <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+        </div>
+        <h3>¡Importación Exitosa!</h3>
+        <p>Tu conversación ahora continúa exactamente donde la dejaste.</p>
+        <button class="restart-btn" id="btn-restart">Reiniciar Demo</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const extButton = document.getElementById('ext-button');
+    const sidePanel = document.getElementById('side-panel');
+    const btnElegirZip = document.getElementById('btn-elegir-zip');
+    const statusMsg = document.getElementById('status-msg');
+    const claudeTextarea = document.getElementById('claude-textarea');
+    const chip1 = document.getElementById('chip1');
+    const chip2 = document.getElementById('chip2');
+    const btnSendClaude = document.getElementById('btn-send-claude');
+    const successScreen = document.getElementById('success-screen');
+    const btnRestart = document.getElementById('btn-restart');
+    
+    const ttStep1 = document.getElementById('tt-step1');
+    const ttStep2 = document.getElementById('tt-step2');
+    const ttStep3 = document.getElementById('tt-step3');
+
+    setTimeout(() => { startDemo(); }, 500);
+
+    function startDemo() {
+      extButton.classList.add('pulse-target');
+      ttStep1.classList.add('visible');
+    }
+
+    extButton.addEventListener('click', () => {
+      if(!extButton.classList.contains('pulse-target')) return;
+      extButton.classList.remove('pulse-target');
+      ttStep1.classList.remove('visible');
+      sidePanel.classList.add('open');
+      
+      setTimeout(() => {
+        btnElegirZip.classList.add('pulse-target');
+        ttStep2.classList.add('visible');
+      }, 500);
+    });
+
+    btnElegirZip.addEventListener('click', () => {
+      if(!btnElegirZip.classList.contains('pulse-target')) return;
+      btnElegirZip.classList.remove('pulse-target');
+      ttStep2.classList.remove('visible');
+      
+      btnElegirZip.textContent = "Procesando ZIP...";
+      
+      setTimeout(() => {
+        btnElegirZip.textContent = "Elegir ZIP exportados…";
+        statusMsg.classList.add('visible');
+        
+        // Simulate auto-typing in Claude
+        let text = "Aquí tienes la continuación del chat anterior. Por favor, lee el contexto adjunto.";
+        let i = 0;
+        claudeTextarea.value = "";
+        
+        function typeWriter() {
+          if (i < text.length) {
+            claudeTextarea.value += text.charAt(i);
+            i++;
+            setTimeout(typeWriter, 20);
+          } else {
+            // Show chips
+            chip1.classList.add('visible');
+            setTimeout(() => { chip2.classList.add('visible'); }, 200);
+            
+            btnSendClaude.classList.add('active');
+            
+            setTimeout(() => {
+              btnSendClaude.classList.add('pulse-target');
+              ttStep3.classList.add('visible');
+            }, 500);
+          }
+        }
+        typeWriter();
+        
+      }, 1000);
+    });
+
+    btnSendClaude.addEventListener('click', () => {
+      if(!btnSendClaude.classList.contains('pulse-target')) return;
+      btnSendClaude.classList.remove('pulse-target');
+      ttStep3.classList.remove('visible');
+      
+      successScreen.classList.add('visible');
+    });
+    
+    btnRestart.addEventListener('click', () => {
+      successScreen.classList.remove('visible');
+      sidePanel.classList.remove('open');
+      statusMsg.classList.remove('visible');
+      btnSendClaude.classList.remove('active');
+      btnSendClaude.classList.remove('pulse-target');
+      btnElegirZip.classList.remove('pulse-target');
+      extButton.classList.remove('pulse-target');
+      chip1.classList.remove('visible');
+      chip2.classList.remove('visible');
+      claudeTextarea.value = "";
+      
+      ttStep1.classList.remove('visible');
+      ttStep2.classList.remove('visible');
+      ttStep3.classList.remove('visible');
+      
+      setTimeout(() => { startDemo(); }, 600);
+    });
+  </script>
+</body>
+</html>
