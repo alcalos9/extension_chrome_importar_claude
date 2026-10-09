@@ -26,8 +26,18 @@ function setProgreso(hecho, total) {
   p.value = hecho;
 }
 
+let enCurso = false;
+
+// Una conversación de proyecto solo se puede importar cuando su proyecto ya terminó de importarse.
+const esperaProyecto = (c) => !!c.padre && c.padre.estado !== 'listo';
+
+function actualizarBotones() {
+  convs.forEach((c) => { if (c.boton) c.boton.disabled = enCurso || esperaProyecto(c); });
+}
+
 function ocupado(si) {
-  document.querySelectorAll('.conv button').forEach((b) => { b.disabled = si; });
+  enCurso = si;
+  actualizarBotones();
   document.querySelectorAll('.picker').forEach((i) => { i.disabled = si; });
 }
 
@@ -119,6 +129,14 @@ function pintarFila(c) {
   c.avisos.hidden = !c.notas.length;
   c.fila.dataset.estado = c.estado;
   c.boton.textContent = BOTON[c.tipo][c.estado === 'pendiente' ? 0 : 1];
+  if (esperaProyecto(c) && c.estado === 'pendiente') {
+    c.lugarEl.textContent = `Primero importa el proyecto «${c.padre.nombre}»`;
+    c.lugarEl.hidden = false;
+  }
+  c.boton.title = esperaProyecto(c) ? 'Disponible cuando termine «Importar proyecto»' : '';
+  c.boton.disabled = enCurso || esperaProyecto(c);
+  // Al cambiar el estado de un proyecto, sus conversaciones se habilitan o deshabilitan.
+  if (c.tipo === 'proyecto') convs.filter((x) => x.padre === c && x.fila).forEach(pintarFila);
 }
 
 function tituloYMeta(c) {
