@@ -9,59 +9,81 @@
 <body>
   <header>
     <h1>Importar Chats a Claude</h1>
-    <p class="sutil">Importa a Claude lo que exportaste con «Exportar Chats Claude» o «Exportar Chats ChatGPT»: conversaciones, proyectos y skills.</p>
+    <p class="sutil">Sube a tu cuenta de Claude lo que exportaste con «Exportar Chats Claude» o «Exportar Chats ChatGPT». ¿Qué quieres importar?</p>
   </header>
 
-  <section class="acciones">
-    <label class="btn primario" for="zips">Elegir ZIP exportados…</label>
-    <input type="file" id="zips" accept=".zip,application/zip" multiple hidden>
-  </section>
-
-  <fieldset class="destino">
-    <legend>¿Dónde quieres dejar las conversaciones?</legend>
-
-    <label class="opcion">
-      <input type="radio" name="modo" value="suelto" checked>
-      <span><strong>Chat suelto</strong><small>Un chat nuevo, fuera de cualquier proyecto.</small></span>
-    </label>
-
-    <label class="opcion">
-      <input type="radio" name="modo" value="existente">
-      <span><strong>En un proyecto existente</strong><small>Se agrega como chat dentro de uno de tus proyectos.</small></span>
-    </label>
-    <div class="detalle" id="detalle-existente" hidden>
-      <select id="sel-proyecto" aria-label="Proyecto existente"></select>
-      <button id="btn-proyectos" class="btn secundario peq" type="button">Actualizar lista</button>
-    </div>
-
-    <label class="opcion">
-      <input type="radio" name="modo" value="nuevo">
-      <span><strong>En un proyecto nuevo</strong><small>Crea un proyecto con el nombre que indiques y deja el chat dentro.</small></span>
-    </label>
-    <div class="detalle" id="detalle-nuevo" hidden>
-      <input type="text" id="nombre-proyecto" placeholder="Nombre del nuevo proyecto" maxlength="100">
-      <button id="btn-crear" class="btn secundario peq" type="button">Crear proyecto</button>
-    </div>
-    <p class="sutil ayuda" id="ayuda-nuevo" hidden>Se crea al pulsar «Crear proyecto», o automáticamente al preparar la primera conversación.</p>
-    <p class="sutil ayuda">Las conversaciones que vienen dentro de un proyecto exportado se agregan a ese proyecto, elijas lo que elijas aquí.</p>
-  </fieldset>
-
-  <details class="plantilla">
-    <summary>Mensaje inicial (editable)</summary>
-    <textarea id="plantilla" rows="9" spellcheck="false"></textarea>
-    <p class="sutil">Variables: <code>{origen}</code> <code>{titulo}</code> <code>{mensajes}</code> <code>{fecha}</code></p>
-    <button id="btn-restaurar" class="btn secundario peq" type="button">Restaurar mensaje por defecto</button>
-  </details>
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-vista="conv" aria-selected="true">Conversaciones</button>
+    <button class="tab" role="tab" data-vista="proy" aria-selected="false">Proyectos</button>
+    <button class="tab" role="tab" data-vista="skill" aria-selected="false">Skills</button>
+  </nav>
 
   <p id="estado" class="estado" role="status"></p>
   <progress id="progreso" hidden></progress>
 
-  <div id="lista"></div>
+  <!-- ===== Conversaciones ===== -->
+  <section class="vista" id="vista-conv">
+    <p class="paso"><b>1.</b> Elige el ZIP de cada conversación que exportaste.</p>
+    <label class="btn primario" for="zips-conv">Elegir ZIP de conversaciones…</label>
+    <input type="file" id="zips-conv" class="picker" data-vista="conv" accept=".zip,application/zip" multiple hidden>
 
-  <p class="sutil nota">
-    La extensión crea un chat nuevo, adjunta los archivos y escribe el mensaje, pero <strong>no lo envía</strong>:
-    revisa la pestaña de Claude y pulsa Enviar tú. No cambies de pestaña mientras se prepara.
-  </p>
+    <fieldset class="destino">
+      <legend><b>2.</b> ¿Dónde quieres dejarlas en Claude?</legend>
+
+      <label class="opcion">
+        <input type="radio" name="modo" value="suelto" checked>
+        <span><strong>Chat suelto</strong><small>Un chat nuevo, fuera de cualquier proyecto.</small></span>
+      </label>
+
+      <label class="opcion">
+        <input type="radio" name="modo" value="existente">
+        <span><strong>En un proyecto existente</strong><small>Se agrega como chat dentro de uno de tus proyectos.</small></span>
+      </label>
+      <div class="detalle" id="detalle-existente" hidden>
+        <select id="sel-proyecto" aria-label="Proyecto existente"></select>
+        <button id="btn-proyectos" class="btn secundario peq" type="button">Actualizar lista</button>
+      </div>
+
+      <label class="opcion">
+        <input type="radio" name="modo" value="nuevo">
+        <span><strong>En un proyecto nuevo</strong><small>Crea un proyecto con el nombre que indiques y deja el chat dentro.</small></span>
+      </label>
+      <div class="detalle" id="detalle-nuevo" hidden>
+        <input type="text" id="nombre-proyecto" placeholder="Nombre del nuevo proyecto" maxlength="100">
+        <button id="btn-crear" class="btn secundario peq" type="button">Crear proyecto</button>
+      </div>
+      <p class="sutil ayuda" id="ayuda-nuevo" hidden>Se crea al pulsar «Crear proyecto», o solo al importar la primera conversación.</p>
+    </fieldset>
+
+    <p class="paso"><b>3.</b> Pulsa <b>Importar conversación</b> en cada una. Se abre un chat de Claude con todo listo: <b>tú pulsas Enviar</b>.</p>
+    <div id="lista-conv" class="lista"></div>
+
+    <details class="plantilla">
+      <summary>Mensaje inicial (opcional, editable)</summary>
+      <textarea id="plantilla" rows="9" spellcheck="false"></textarea>
+      <p class="sutil">Variables: <code>{origen}</code> <code>{titulo}</code> <code>{mensajes}</code> <code>{fecha}</code></p>
+      <button id="btn-restaurar" class="btn secundario peq" type="button">Restaurar mensaje por defecto</button>
+    </details>
+    <p class="sutil nota">No cambies de pestaña mientras se importa una conversación.</p>
+  </section>
+
+  <!-- ===== Proyectos ===== -->
+  <section class="vista" id="vista-proy" hidden>
+    <p class="paso"><b>1.</b> Elige el ZIP de proyectos que exportaste (se llama <code>proyectos_claude_…</code> o <code>proyectos_chatgpt_…</code>).</p>
+    <label class="btn primario" for="zips-proy">Elegir ZIP de proyectos…</label>
+    <input type="file" id="zips-proy" class="picker" data-vista="proy" accept=".zip,application/zip" multiple hidden>
+    <p class="paso"><b>2.</b> Pulsa <b>Importar proyecto</b>: se crea un proyecto nuevo en Claude con sus instrucciones y archivos. Después importa sus conversaciones, que quedan dentro del proyecto.</p>
+    <div id="lista-proy" class="lista"></div>
+  </section>
+
+  <!-- ===== Skills ===== -->
+  <section class="vista" id="vista-skill" hidden>
+    <p class="paso"><b>1.</b> Elige el ZIP de skills que exportaste (<code>skills_claude_…</code>), o el .zip de un skill suelto.</p>
+    <label class="btn primario" for="zips-skill">Elegir ZIP de skills…</label>
+    <input type="file" id="zips-skill" class="picker" data-vista="skill" accept=".zip,application/zip" multiple hidden>
+    <p class="paso"><b>2.</b> Pulsa <b>Importar skill</b>: se agrega a tu cuenta en Configuración → Capacidades.</p>
+    <div id="lista-skill" class="lista"></div>
+  </section>
 
   <details>
     <summary>Registro</summary>

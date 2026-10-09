@@ -28,7 +28,7 @@ function setProgreso(hecho, total) {
 
 function ocupado(si) {
   document.querySelectorAll('.conv button').forEach((b) => { b.disabled = si; });
-  $('zips').disabled = si;
+  document.querySelectorAll('.picker').forEach((i) => { i.disabled = si; });
 }
 
 function cargarPlantilla() {
@@ -55,7 +55,7 @@ async function leerJson(zip, ruta, avisoNombre) {
   }
 }
 
-async function leerZip(file) {
+async function leerZip(file, salida) {
   const zip = await JSZip.loadAsync(file);
   const rutas = Object.keys(zip.files).filter((r) => !zip.files[r].dir);
   const cl = Core.clasificarZip(rutas);
@@ -65,7 +65,7 @@ async function leerZip(file) {
   const leerConv = async (base, padre) => {
     const conv = await leerJson(zip, base + 'conversacion.json', file.name);
     if (!conv) return;
-    convs.push({ tipo: 'conv', zip, base, conv, plan: Core.planificarAdjuntos(base, archivos), padre, zipNombre: file.name });
+    salida.push({ tipo: 'conv', zip, base, conv, plan: Core.planificarAdjuntos(base, archivos), padre, zipNombre: file.name });
     resumen.conversaciones++;
   };
 
@@ -74,7 +74,7 @@ async function leerZip(file) {
   for (const base of cl.proyBases) {
     const info = (await leerJson(zip, base + 'proyecto.json', file.name)) || {};
     const p = { tipo: 'proyecto', zip, base, info, nombre: info.nombre || dirDe(base), plan: Core.planificarProyecto(base, rutas), uuid: null, zipNombre: file.name };
-    convs.push(p);
+    salida.push(p);
     resumen.proyectos++;
     for (const b of cl.convBases.filter((x) => Core.proyectoDe(x, cl.proyBases) === base)) { propios.add(b); await leerConv(b, p); }
   }
@@ -83,32 +83,35 @@ async function leerZip(file) {
   // Skills exportados (con skill.json) o un skill suelto (carpeta con SKILL.md).
   for (const base of cl.skillBases) {
     const info = (await leerJson(zip, base + 'skill.json', file.name)) || {};
-    convs.push({ tipo: 'skill', zip, base, info, nombre: info.nombre || dirDe(base), plan: Core.planificarSkill(base, rutas), zipNombre: file.name });
+    salida.push({ tipo: 'skill', zip, base, info, nombre: info.nombre || dirDe(base), plan: Core.planificarSkill(base, rutas), zipNombre: file.name });
     resumen.skills++;
   }
   if (cl.skillSuelto !== null) {
-    convs.push({ tipo: 'skill', zip, base: cl.skillSuelto, info: {}, nombre: cl.skillSuelto ? dirDe(cl.skillSuelto) : file.name.replace(/\.zip$/i, ''), suelto: file, plan: { zipRuta: null, archivos: [] }, zipNombre: file.name });
+    salida.push({ tipo: 'skill', zip, base: cl.skillSuelto, info: {}, nombre: cl.skillSuelto ? dirDe(cl.skillSuelto) : file.name.replace(/\.zip$/i, ''), suelto: file, plan: { zipRuta: null, archivos: [] }, zipNombre: file.name });
     resumen.skills++;
   }
   return resumen;
 }
 
 const ESTADOS = {
-  pendiente: 'Sin importar',
-  trabajando: 'Procesando…',
-  listo: '✓ Listo',
+  pendiente: 'Pendiente',
+  trabajando: 'Importando…',
+  listo: '✓ Importado',
   error: '✗ Con error',
 };
 
 const BOTON = {
-  conv: ['Preparar', 'Preparar de nuevo'],
+  conv: ['Importar conversación', 'Importar de nuevo'],
   proyecto: ['Importar proyecto', 'Importar de nuevo'],
-  skill: ['Subir skill', 'Subir de nuevo'],
+  skill: ['Importar skill', 'Importar de nuevo'],
 };
+
+// Pestaña a la que pertenece cada elemento (las conversaciones de un proyecto viajan con él).
+const vistaDe = (c) => (c.tipo === 'skill' ? 'skill' : c.tipo === 'proyecto' || c.padre ? 'proy' : 'conv');
 
 // Cada elemento es una fila: título, estado, lugar donde quedó y, solo si hace falta, avisos.
 function pintarFila(c) {
-  c.badge.textContent = ESTADOS[c.estado];
+  c.badge.textContent = c.tipo === 'conv' && c.estado === 'listo' ? '✓ Listo para enviar' : ESTADOS[c.estado];
   c.badge.className = `badge ${c.estado}`;
   c.lugarEl.textContent = c.lugar ? `Lugar: ${c.lugar}` : '';
   c.lugarEl.hidden = !c.lugar;
@@ -129,9 +132,9 @@ function tituloYMeta(c) {
 }
 
 function renderLista() {
-  const cont = $('lista');
-  cont.textContent = '';
+  ['conv', 'proy', 'skill'].forEach((v) => { $(`lista-${v}`).textContent = ''; });
   convs.forEach((c, i) => {
+    const cont = $(`lista-${vistaDe(c)}`);
     const t = tituloYMeta(c);
     const fila = document.createElement('div');
     fila.className = c.padre ? 'conv hija' : 'conv';
@@ -152,39 +155,59 @@ function renderLista() {
     avisos.className = 'avisos';
 
     const btn = document.createElement('button');
-    btn.className = 'btn secundario peq';
+    btn.className = 'btn primario peq';
     btn.addEventListener('click', () => accionFila(i));
     const pie = document.createElement('div');
     pie.className = 'pie';
     pie.append(btn);
 
     fila.append(cab, meta, lugarEl, avisos, pie);
-    Object.assign(c, { fila, badge, lugarEl, avisos, boton: btn, estado: 'pendiente', lugar: '', notas: [] });
-    if (c.tipo === 'conv' && c.plan.omitidos.length) c.notas.push(`${c.plan.omitidos.length} archivo(s) no se adjuntarán: ${c.plan.omitidos.map((o) => o.motivo).filter((m, k, arr) => arr.indexOf(m) === k).join('; ')}.`);
+    const primera = c.estado === undefined;
+    Object.assign(c, { fila, badge, lugarEl, avisos, boton: btn, estado: c.estado || 'pendiente', lugar: c.lugar || '', notas: c.notas || [] });
+    if (primera && c.tipo === 'conv' && c.plan.omitidos.length) c.notas.push(`${c.plan.omitidos.length} archivo(s) no se adjuntarán: ${c.plan.omitidos.map((o) => o.motivo).filter((m, k, arr) => arr.indexOf(m) === k).join('; ')}.`);
     pintarFila(c);
     cont.append(fila);
   });
 }
 
-async function alElegirZips(ev) {
+const NOMBRE_VISTA = { conv: 'conversaciones', proy: 'proyectos', skill: 'skills' };
+
+function mostrarVista(v) {
+  document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.vista === v)));
+  document.querySelectorAll('.vista').forEach((el) => { el.hidden = el.id !== `vista-${v}`; });
+}
+
+async function alElegirZips(ev, vista) {
   const files = [...ev.target.files];
   ev.target.value = '';
   if (!files.length) return;
   ocupado(true);
   setProgreso(0, 0);
   setEstado('Leyendo ZIP…');
-  convs.length = 0;
   try {
+    const nuevos = [];
     for (const f of files) {
-      const r = await leerZip(f);
+      const r = await leerZip(f, nuevos);
       const partes = [];
       if (r.proyectos) partes.push(`${r.proyectos} proyecto(s)`);
       if (r.skills) partes.push(`${r.skills} skill(s)`);
       if (r.conversaciones) partes.push(`${r.conversaciones} conversación(es)`);
       log(partes.length ? `«${f.name}»: ${partes.join(', ')}.` : `«${f.name}» no contiene conversaciones, proyectos ni skills de estas extensiones.`);
     }
+    // Lo nuevo reemplaza lo anterior de la misma pestaña; las demás pestañas no se tocan.
+    const vistas = new Set(nuevos.map(vistaDe));
+    for (let i = convs.length - 1; i >= 0; i--) if (vistas.has(vistaDe(convs[i]))) convs.splice(i, 1);
+    convs.push(...nuevos);
     renderLista();
-    setEstado(convs.length ? 'Pulsa el botón de cada elemento para importarlo.' : 'No se encontró nada que importar en esos ZIP.', !convs.length);
+    if (!nuevos.length) {
+      setEstado('No encontré nada que importar en ese ZIP. ¿Es uno exportado con las extensiones «Exportar Chats»?', true);
+    } else if (vistas.has(vista)) {
+      setEstado(`Listo: pulsa el botón azul de cada elemento para importarlo.`);
+    } else {
+      const v = [...vistas][0];
+      mostrarVista(v);
+      setEstado(`Ese ZIP trae ${NOMBRE_VISTA[v]}: te llevé a la pestaña correspondiente.`);
+    }
   } catch (e) {
     log(`ERROR leyendo ZIP: ${e.message}`);
     setEstado(`No se pudo leer el ZIP: ${e.message}`, true);
@@ -543,7 +566,7 @@ function accionFila(i) {
 async function preparar(indice) {
   const c = convs[indice];
   if (c.estado === 'listo' &&
-      !confirm(`«${c.conv.titulo}» ya se preparó en Claude.\n\nSi ya enviaste el mensaje, se creará un chat duplicado. ¿Preparar otro chat?`)) return;
+      !confirm(`«${c.conv.titulo}» ya se importó a Claude.\n\nSi ya enviaste el mensaje, se creará un chat duplicado. ¿Importarla otra vez?`)) return;
   ocupado(true);
   const avisosOmitidos = c.notas.filter((n) => /no se adjuntarán/.test(n));
   const lineas = [];
@@ -599,7 +622,7 @@ async function preparar(indice) {
     await enPagina(tab.id, 'limpiar');
 
     c.estado = 'listo';
-    c.notas = [...avisosOmitidos, ...lineas];
+    c.notas = ['Falta un paso: ve a la pestaña de Claude, revisa y pulsa Enviar.', ...avisosOmitidos, ...lineas];
     setEstado('');
   } catch (e) {
     log(`ERROR preparando «${c.conv.titulo}»: ${e.message}`);
@@ -613,7 +636,8 @@ async function preparar(indice) {
   }
 }
 
-$('zips').addEventListener('change', alElegirZips);
+document.querySelectorAll('.picker').forEach((i) => i.addEventListener('change', (ev) => alElegirZips(ev, i.dataset.vista)));
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => mostrarVista(t.dataset.vista)));
 $('btn-proyectos').addEventListener('click', () => cargarProyectos());
 $('btn-crear').addEventListener('click', alPulsarCrear);
 $('nombre-proyecto').addEventListener('keydown', (e) => { if (e.key === 'Enter') alPulsarCrear(); });
@@ -624,4 +648,4 @@ $('btn-restaurar').addEventListener('click', () => {
   guardarPlantilla();
 });
 cargarPlantilla();
-setEstado('Elige uno o más ZIP para empezar.');
+setEstado('');

@@ -50,7 +50,8 @@ h1 { font-size: 16px; margin: 0 0 2px; }
 .btn:disabled { opacity: 0.55; cursor: progress; }
 .primario { background: var(--acento); }
 .primario:hover { background: var(--acento-hover); }
-.secundario { background: #6b665e; }
+.secundario { background: transparent; color: var(--acento); border: 1px solid var(--acento); }
+.secundario:hover { background: rgba(91, 143, 208, 0.12); }
 .peq { padding: 6px 10px; font-size: 12px; }
 .exito { background: var(--exito); }
 
@@ -71,7 +72,8 @@ progress { width: 100%; margin-top: 8px; }
 .estado { margin: 12px 0 0; font-weight: 600; }
 .estado.error { color: #c0392b; }
 
-#lista { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.lista { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+.lista:empty { display: none; }
 .conv { border: 1px solid var(--borde); border-radius: 8px; background: var(--tarjeta); padding: 10px 12px; }
 .conv .cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .conv h2 { font-size: 14px; margin: 0; word-break: break-word; }
@@ -99,3 +101,10 @@ pre { white-space: pre-wrap; font-size: 11px; max-height: 240px; overflow: auto;
 .detalle[hidden] { display: none; }
 .detalle select, .detalle input[type="text"] { flex: 1; min-width: 0; padding: 6px 8px; font: inherit; box-sizing: border-box; }
 .conv.hija { margin-left: 18px; }
+
+.tabs { display: flex; gap: 4px; margin: 4px 0 10px; border-bottom: 1px solid var(--borde); }
+.tab { flex: 1; padding: 8px 6px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--sutil); font: inherit; font-weight: 600; cursor: pointer; }
+.tab[aria-selected="true"] { color: var(--acento); border-bottom-color: var(--acento); }
+.paso { margin: 12px 0 6px; font-size: 13px; }
+.vista > label.btn { margin-top: 2px; }
+code { font-size: 12px; }
