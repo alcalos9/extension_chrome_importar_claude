@@ -570,6 +570,14 @@ async function accionSubirSkill(c) {
   pintarFila(c);
   setProgreso(0, 0);
   try {
+    const tieneContenido = c.suelto || c.plan.zipRuta || c.plan.archivos.some((x) => /(^|\/)SKILL\.md$/i.test(x.relativa));
+    if (!tieneContenido) {
+      c.estado = 'error';
+      c.notas = ['Este skill se exportó vacío (solo trae sus datos, sin SKILL.md ni archivos), así que no hay nada que subir.',
+        'Vuelve a exportarlo con la extensión «Exportar Chats Claude» actualizada, o súbelo desde el archivo original.'];
+      log(`Skill «${c.nombre}»: el ZIP no contiene SKILL.md ni el ZIP original; revisa INDICE.md del export (errores de descarga).`);
+      return;
+    }
     setEstado(`Importando el skill «${c.nombre}»…`);
     let blob = await zipDelSkill(c);
     const nombreZip = `${c.nombre.replace(/[\\/:*?"<>|]+/g, '_')}.zip`;
