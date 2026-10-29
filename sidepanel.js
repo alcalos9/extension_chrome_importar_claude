@@ -537,8 +537,19 @@ function descargarBlob(blob, nombre) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 
+// El nombre que Claude muestra sale de SKILL.md (campo «name:»); si no se puede leer, se usa el de la carpeta.
+async function nombreEnSkill(blob, respaldo) {
+  try {
+    const z = await JSZip.loadAsync(blob);
+    const md = Object.keys(z.files).find((r) => /^([^/]+\/)?SKILL\.md$/i.test(r));
+    const m = md && (await z.file(md).async('string')).match(/^name:\s*["']?([^\n"']+)/m);
+    if (m) return m[1].trim();
+  } catch (e) { /* se usa el respaldo */ }
+  return respaldo;
+}
+
 async function accionSubirSkill(c) {
-  if (c.estado === 'listo' && !confirm(`El skill «${c.nombre}» ya se subió.\n\n¿Subirlo otra vez?`)) return;
+  if (c.estado === 'listo' && !confirm(`El skill «${c.nombre}» ya se importó.\n\n¿Importarlo otra vez?`)) return;
   ocupado(true);
   c.estado = 'trabajando';
   c.lugar = '';
@@ -546,22 +557,35 @@ async function accionSubirSkill(c) {
   pintarFila(c);
   setProgreso(0, 0);
   try {
-    setEstado(`Subiendo el skill «${c.nombre}»…`);
+    setEstado(`Importando el skill «${c.nombre}»…`);
     const blob = await zipDelSkill(c);
     const nombreZip = `${c.nombre.replace(/[\\/:*?"<>|]+/g, '_')}.zip`;
-    const r = await conPestanaClaude((tabId) => subirArchivoMultipart(tabId, blob, nombreZip, RUTAS_SKILL));
-    if (r.ok) {
+    const nombreSkill = await nombreEnSkill(blob, c.nombre);
+    const { r, antes, despues } = await conPestanaClaude(async (tabId) => {
+      const antes = await enPagina(tabId, 'listarSkills');
+      const r = await subirArchivoMultipart(tabId, blob, nombreZip, RUTAS_SKILL);
+      const despues = r.ok ? await enPagina(tabId, 'listarSkills') : null;
+      return { r, antes, despues };
+    });
+
+    // «Importado» solo si el skill de verdad aparece en la lista de la cuenta.
+    const aparece = !!despues && (despues.includes(nombreSkill) || (antes && despues.length > antes.length));
+    log(`Skill «${nombreSkill}»: subida ${r.ok ? `aceptada por ${r.ruta} ${JSON.stringify(r.data || {}).slice(0, 200)}` : 'rechazada'}; lista antes=${antes ? antes.length : '?'} después=${despues ? despues.length : '?'}; aparece=${aparece}.`);
+    if (r.ok && aparece) {
       c.estado = 'listo';
-      c.lugar = 'Configuración → Capacidades → Skills';
-      c.notas = ['Revisa que aparezca en esa lista y que esté activado.'];
+      c.lugar = 'Personalización → Skills (Creado por ti)';
+      c.notas = ['Comprobado: ya aparece en tu lista de skills.'];
     } else {
-      log(`Skill «${c.nombre}»: ${(r.intentos || []).join(' | ')}`);
+      if (!r.ok) log(`Skill «${c.nombre}»: ${(r.intentos || []).join(' | ')}`);
       descargarBlob(blob, nombreZip);
       c.estado = 'error';
-      c.notas = [`Claude no aceptó la subida automática. Te descargué «${nombreZip}»: súbelo tú en Configuración → Capacidades → Skills → Subir skill.`];
+      c.notas = [r.ok
+        ? 'Claude respondió que sí, pero el skill no aparece en tu lista, así que no lo doy por importado.'
+        : 'Claude no aceptó la subida automática.',
+      `Te descargué «${nombreZip}»: súbelo tú en Personalización → Skills → Agregar.`];
     }
   } catch (e) {
-    log(`ERROR subiendo el skill «${c.nombre}»: ${e.message}`);
+    log(`ERROR importando el skill «${c.nombre}»: ${e.message}`);
     c.estado = 'error';
     c.notas = [e.message];
   } finally {

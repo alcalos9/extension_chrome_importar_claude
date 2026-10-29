@@ -22,7 +22,7 @@ Mientras importas una conversación, no cambies de pestaña.
 
 ## Si algo no se sube
 - **Archivos de una conversación o proyecto:** arrástralos tú desde el ZIP.
-- **Un skill:** la extensión descarga su ZIP; súbelo en Claude → Configuración → Capacidades.
+- **Un skill:** la extensión descarga su ZIP; súbelo en Claude → Personalización → Skills → Agregar.
 - Para quien te ayude, el detalle queda en **Registro**, al final del panel.
 
 ## Bueno saber

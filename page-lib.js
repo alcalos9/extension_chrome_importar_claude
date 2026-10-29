@@ -252,6 +252,23 @@
     return { ok: false, intentos };
   }
 
+  // Nombres de los skills de la cuenta (para comprobar que una subida realmente apareció).
+  async function listarSkills() {
+    const org = await organizacion();
+    const rutas = [
+      `/api/organizations/${org}/skills/list-skills?include_public_skills=true`,
+      `/api/organizations/${org}/skills/list-skills`,
+      `/api/organizations/${org}/skills`,
+    ];
+    for (const ruta of rutas) {
+      const r = await llamar('GET', ruta);
+      if (!r.ok || !r.data) continue;
+      const lista = Array.isArray(r.data) ? r.data : (r.data.skills || r.data.data || r.data.items || []);
+      if (Array.isArray(lista)) return lista.map((s) => String(s.name || s.display_name || s.skill_id || s.id || '')).filter(Boolean);
+    }
+    return null;
+  }
+
   // El chat no existe hasta que el usuario pulsa Enviar. Esta vigilancia (vive mientras la pestaña no se
   // recargue) detecta el chat nuevo en la URL y le pone el título original; Claude genera uno automático
   // tras la primera respuesta, así que se reaplica durante un rato.
@@ -290,5 +307,5 @@
     return true;
   }
 
-  globalThis.__IMPORTAR_CLAUDE__ = { configurarProyecto, subirDocumento, subirMultipart, vigilarRenombre, listarProyectos, crearProyecto, esperarEditor, guardarTrozo, adjuntarGuardados, escribirPrompt, limpiar };
+  globalThis.__IMPORTAR_CLAUDE__ = { listarSkills, configurarProyecto, subirDocumento, subirMultipart, vigilarRenombre, listarProyectos, crearProyecto, esperarEditor, guardarTrozo, adjuntarGuardados, escribirPrompt, limpiar };
 })();
