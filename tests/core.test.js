@@ -83,5 +83,10 @@ const Core = require('../core.js');
   assert.strictEqual(Core.clasificarZip(['SKILL.md']).skillSuelto, '');
   assert.strictEqual(Core.clasificarZip(['a.txt']).skillSuelto, null);
 
+  assert.strictEqual(Core.localizarSkillMd(['x/.claude-plugin/plugin.json', 'x/skills/x/SKILL.md', 'x/skills/x/a.py'], 'x'), 'x/skills/x/');
+  assert.strictEqual(Core.localizarSkillMd(['SKILL.md', 'otro/SKILL.md'], 'x'), '');
+  assert.strictEqual(Core.localizarSkillMd(['a/SKILL.md', 'b/SKILL.md'], 'b'), 'b/');
+  assert.strictEqual(Core.localizarSkillMd(['a/x.txt'], 'a'), null);
+
   console.log('core.test.js: OK');
 })().catch((e) => { console.error(e); process.exit(1); });

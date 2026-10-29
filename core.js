@@ -156,7 +156,18 @@
     return { zipRuta: zip ? zip.ruta : null, archivos: dentro.filter((a) => a !== zip) };
   }
 
-  const api = { esTextoPlano, clasificarZip, proyectoDe, planificarProyecto, planificarSkill, LIMITES, PLANTILLA_POR_DEFECTO, localizarConversaciones, planificarAdjuntos, construirPrompt, resumenConversacion, origenDe, basename, mimeDe };
+  // Carpeta (con «/» final, o '' si está en la raíz) del SKILL.md del skill. Si hay varios, el menos profundo;
+  // en empate, el de la carpeta que se llama como el skill.
+  function localizarSkillMd(rutas, nombreSkill) {
+    const cand = rutas.filter((r) => /(^|\/)SKILL\.md$/i.test(r)).map((r) => r.slice(0, r.length - 'SKILL.md'.length));
+    if (!cand.length) return null;
+    const prof = (d) => d.split('/').filter(Boolean).length;
+    const min = Math.min(...cand.map(prof));
+    const mejores = cand.filter((d) => prof(d) === min);
+    return mejores.find((d) => basename(d.replace(/\/$/, '')) === nombreSkill) || mejores[0];
+  }
+
+  const api = { localizarSkillMd, esTextoPlano, clasificarZip, proyectoDe, planificarProyecto, planificarSkill, LIMITES, PLANTILLA_POR_DEFECTO, localizarConversaciones, planificarAdjuntos, construirPrompt, resumenConversacion, origenDe, basename, mimeDe };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Core = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

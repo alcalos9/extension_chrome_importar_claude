@@ -537,27 +537,34 @@ function descargarBlob(blob, nombre) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 
+const sinBasura = (r) => !/^__MACOSX\//.test(r) && !/(^|\/)\.DS_Store$/.test(r);
+
 // El nombre que Claude muestra sale de SKILL.md (campo «name:»); si no se puede leer, se usa el de la carpeta.
 async function nombreEnSkill(blob, respaldo) {
   try {
     const z = await JSZip.loadAsync(blob);
-    const md = Object.keys(z.files).find((r) => /^([^/]+\/)?SKILL\.md$/i.test(r));
-    const m = md && (await z.file(md).async('string')).match(/^name:\s*["']?([^\n"']+)/m);
+    const rutas = Object.keys(z.files).filter((r) => !z.files[r].dir && sinBasura(r));
+    const dir = Core.localizarSkillMd(rutas, respaldo);
+    const m = dir !== null && (await z.file(dir + 'SKILL.md').async('string')).match(/^name:\s*["']?([^\n"']+)/m);
     if (m) return m[1].trim();
   } catch (e) { /* se usa el respaldo */ }
   return respaldo;
 }
 
-// Claude exige que todos los archivos del skill (incluido SKILL.md) vayan dentro de UNA carpeta en la raíz del ZIP.
-// Si el ZIP trae los archivos sueltos o en varias carpetas, se reempaqueta dentro de una carpeta con el nombre del skill.
+// Claude exige UNA carpeta en la raíz del ZIP con SKILL.md directamente dentro, y no admite manifiestos de plugin.
+// Si el ZIP trae otra estructura (archivos sueltos o un plugin con skills/<nombre>/SKILL.md), se reempaqueta
+// quedándose solo con la carpeta del skill.
 async function asegurarCarpetaSkill(blob, nombreSkill) {
   const z = await JSZip.loadAsync(blob);
-  const rutas = Object.keys(z.files).filter((r) => !z.files[r].dir && !/^__MACOSX\//.test(r) && !/(^|\/)\.DS_Store$/.test(r));
-  const raices = new Set(rutas.map((r) => (r.includes('/') ? r.split('/')[0] : '')));
-  if (raices.size === 1 && !raices.has('') && rutas.some((r) => /^[^/]+\/SKILL\.md$/i.test(r))) return blob;
+  const rutas = Object.keys(z.files).filter((r) => !z.files[r].dir && sinBasura(r));
+  const dir = Core.localizarSkillMd(rutas, nombreSkill);
+  if (dir === null) throw new Error('El ZIP del skill no contiene SKILL.md.');
+  const yaCorrecto = /^[^/]+\/$/.test(dir) && rutas.every((r) => r.startsWith(dir));
+  if (yaCorrecto) return blob;
+  const carpeta = (dir ? Core.basename(dir.replace(/\/$/, '')) : nombreSkill).replace(/[\\/:*?"<>|]+/g, '_');
   const nuevo = new JSZip();
-  const raiz = nuevo.folder(nombreSkill.replace(/[\\/:*?"<>|]+/g, '_'));
-  for (const r of rutas) raiz.file(r, await z.file(r).async('uint8array'));
+  const raiz = nuevo.folder(carpeta);
+  for (const r of rutas.filter((x) => x.startsWith(dir))) raiz.file(r.slice(dir.length), await z.file(r).async('uint8array'));
   return nuevo.generateAsync({ type: 'blob', compression: 'DEFLATE' });
 }
 
