@@ -10,7 +10,7 @@
       inputArchivo: 'input[type="file"]',
       miniaturas: '[data-testid="file-thumbnail"], [data-testid*="attachment"], [data-testid*="file-preview"]',
     },
-    esperaEditorMs: 20000,
+    esperaEditorMs: 45000,
     esperaMiniaturasMs: 30000,
   };
 
@@ -26,11 +26,23 @@
     return null;
   }
 
-  const editor = () => document.querySelector(CFG.sel.editor);
+  // El editor de mensajes: el selector habitual y, si la interfaz cambió, cualquier campo editable visible
+  // (se prefiere el que está dentro de un formulario o fieldset, que es el cuadro de mensaje).
+  function editor() {
+    const normal = document.querySelector(CFG.sel.editor);
+    if (normal) return normal;
+    const visibles = [...document.querySelectorAll('[contenteditable="true"], [contenteditable=""]')]
+      .filter((el) => el.offsetParent !== null && el.getBoundingClientRect().width > 100);
+    return visibles.find((el) => el.closest('fieldset, form')) || visibles[0] || null;
+  }
 
   async function esperarEditor() {
     const ed = await waitFor(editor, CFG.esperaEditorMs);
-    if (!ed) throw new Error('No apareció el cuadro de mensaje de Claude (¿sesión cerrada o cambió la interfaz?).');
+    if (!ed) {
+      const texto = (document.body && document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+      const editables = document.querySelectorAll('[contenteditable], textarea').length;
+      throw new Error(`No apareció el cuadro de mensaje de Claude tras ${CFG.esperaEditorMs / 1000} s. Dirección: ${location.pathname}; campos editables: ${editables}; la página muestra: «${texto || 'nada'}».`);
+    }
     return { url: location.href };
   }
 
